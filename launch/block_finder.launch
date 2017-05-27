@@ -1,10 +1,9 @@
 <?xml version="1.0"?>
 <launch>
- <!-- <node pkg="cv_camera" name="cv_camera" type="cv_camera_node"/> -->
- <node pkg="usb_cam" name="usb_cam_node" type="usb_cam_node" output="screen">
-  <param name="image_width" value="640" />
-  <param name="image_height" value="480" />
-  <param name="pixel_format" value="yuyv" />
+ <node pkg="usb_cam" type="usb_cam_node" name="usb_cam_node" output="screen">
+  <param name="image_width" value="640"/>
+  <param name="image_height" value="480"/>
+  <param name="pixel_format" value="yuyv"/>
  </node>
 <!--
   <node name="image_view" pkg="image_view" type="image_view" output="screen">
@@ -12,5 +11,7 @@
     <param name="autosize" value="true" />
   </node>
 -->
- <node pkg="image_processing" name="block_finder" type="block_finder" output="screen"/>
+ <node pkg="image_processing" type="block_finder" name="block_finder" output="screen"/>
+ <node pkg="tf" type="static_transform_publisher" name="camera_transform_publisher" args="0.318846 -0.0190363 0.49518 0.735879 0.657887 -0.111644 -0.114901 /world /camera_link 100"/>
+ <!--<node pkg="rviz" type="rviz" name="rviz" args="-d $(find PACKAGE_NAME)/image_processing.rviz"/>-->
 </launch>

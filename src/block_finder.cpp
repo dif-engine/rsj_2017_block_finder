@@ -91,7 +91,7 @@ public:
 
 		nh_.param<std::string>("fixed_frame", fixed_frame, "/base_link");
 		nh_.param<std::string>("camera_frame", camera_frame, "/camera_link");
-		nh_.param<std::string>("target_frame", target_frame, "/calibration_pattern");
+		nh_.param<std::string>("target_frame", target_frame, "/pattern_link");
 
 		cv::namedWindow(WINDOW_O);
 		cv::namedWindow(WINDOW_T);
@@ -168,7 +168,7 @@ public:
 					target_transform.setRotation(tf::Quaternion(orientation.x(), orientation.y(), orientation.z(), orientation.w()));
 
 					//usb_camの原点はhead_camera
-					tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, ros::Time::now(), "head_camera", target_frame));
+					tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, ros::Time::now(), "camera_link", target_frame));
 			}
 			catch (tf::TransformException& ex)
 			{
@@ -178,42 +178,52 @@ public:
 		}
 		else
 		{
-			ROS_INFO("Not Found");
+			//ROS_INFO("Not Found");
 		}
 		
-		//Binarization
+		//二値化する。
 		cv::Mat img_bin_, img_bin_2;
 		cv::medianBlur(img_gray_, img_gray_, 3);
 		cv::threshold(img_gray_, img_bin_, threshold_bin, 255, cv::THRESH_BINARY);//threshold(img_gray, img_bin, 0, 255, THRESH_BINARY | THRESH_OTSU);
 
-		//Contour Line
+		//輪郭を求める。
 		std::vector<std::vector<cv::Point> > contours;//輪郭を表現するベクトル
 		img_bin_2 = img_bin_.clone();
 		cv::findContours(img_bin_2, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-		if(contours.empty() != true){
-			double max_area=0;
+		
+		//各輪郭の面積を求める。
+		if(contours.empty() != true)
+		{
+			double max_area=0.0;
 			int max_area_contour=-1;
 			for(int i=0;i<contours.size();i++)
 			{
 				double area=cv::contourArea(contours.at(i));
-				if(max_area<area){
+				if(max_area<area)
+				{
 					max_area=area;
 					max_area_contour=i;
 				}
 				polylines(cv_ptr_->image, contours.at(i), true, cv::Scalar(0, 255, 0), 3);
 			}
+			
+			ROS_INFO("%+d (%.0f)", max_area_contour, max_area);
 
-			//Gravity Point
-			int count=contours.at(max_area_contour).size();
-			double x=0;
-			double y=0;
-			for(int i=0;i<count;i++){
-				x+=contours.at(max_area_contour).at(i).x;
-				y+=contours.at(max_area_contour).at(i).y;
+			//重心を求める。
+			if(max_area_contour != -1)//輪郭が点で表現されることがある。
+			{
+				int count=contours.at(max_area_contour).size();
+				double x=0.0;
+				double y=0.0;
+				for(int i=0;i<count;i++)
+				{
+					x+=contours.at(max_area_contour).at(i).x;
+					y+=contours.at(max_area_contour).at(i).y;
+				}
+				x/=count;
+				y/=count;
+				circle(cv_ptr_->image, cv::Point(x,y), 10, cv::Scalar(0,0,255), -1, CV_AA);
 			}
-			x/=count;
-			y/=count;
-			circle(cv_ptr_->image, cv::Point(x,y), 10, cv::Scalar(0,0,255), -1, CV_AA);
 		}
 
 		//Segmentation
