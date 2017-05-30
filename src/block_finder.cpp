@@ -31,6 +31,7 @@ class BlockFinder
 	image_transport::Publisher image_pub_;
 	ros::Subscriber info_sub_;
 	ros::Publisher pose_pub_;
+	ros::Time begin_;
 	tf::TransformListener tf_listener_;
 	tf::TransformBroadcaster tf_broadcaster_;
 
@@ -42,6 +43,11 @@ class BlockFinder
 
 	cv::Matx33d K;//3x3の行列で、要素はdouble
 	cv::Mat D;
+	cv::Mat tvec;//並進ベクトル
+	cv::Mat rvec;//回転行列
+	
+	cv::Mat ideal_points_;
+	cv::Point2f area_max;
 
 public:
 
@@ -66,9 +72,13 @@ public:
 		cv::Mat corners;
 
 		for (int i = 0; i < boardSize.height; i++)
+		{
 			for (int j = 0; j < boardSize.width; j++)
+			{
 				corners.push_back(cv::Point3f(float(j * squareSize), float(i * squareSize), 0) + offset);
-
+				area_max = cv::Point2f(float(j * squareSize), float(i * squareSize));
+			}
+		}
 		return corners;
 	}
 
@@ -87,9 +97,9 @@ public:
 		info_sub_ = nh_.subscribe("/usb_cam_node/camera_info", 1, &BlockFinder::infoCallback, this);
 		image_sub_ = it.subscribe("/usb_cam_node/image_raw", 1, &BlockFinder::imageCb, this);
 		image_pub_ = it.advertise("/block_finder/image_block", 1);
-		pose_pub_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose", 1);		
+		pose_pub_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose", 1);
 
-		nh_.param<std::string>("fixed_frame", fixed_frame, "/base_link");
+		nh_.param<std::string>("fixed_frame", fixed_frame, "/world");
 		nh_.param<std::string>("camera_frame", camera_frame, "/camera_link");
 		nh_.param<std::string>("target_frame", target_frame, "/pattern_link");
 
@@ -100,6 +110,9 @@ public:
 		cv::moveWindow(WINDOW_T, 640, 0);
 		cv::moveWindow(WINDOW_R, 1280, 0);
 		cv::createTrackbar("Subtracter", WINDOW_T, &threshold_bin, 255);
+		
+		//３次元位置を求める。
+		ideal_points_ = calcChessboardCorners(cv::Size(8, 6), 0.025, cv::Point3f(0.0,0.0,0.0));
 	}
 
 	~BlockFinder()
@@ -112,6 +125,8 @@ public:
 
 	void imageCb(const sensor_msgs::ImageConstPtr& msg)
 	{
+		begin_ = ros::Time::now();
+		
 		geometry_msgs::Pose2D pose_block;
 		pose_block.x = 0;
 		pose_block.y = 0;
@@ -133,7 +148,7 @@ public:
 
 		cv::Mat img_gray_;
 		cvtColor(cv_ptr_->image, img_gray_, CV_BGR2GRAY);
-
+		
 		bool patternfound = findChessboardCorners(img_gray_, patternsize, board_corners, cv::CALIB_CB_ADAPTIVE_THRESH + cv::CALIB_CB_NORMALIZE_IMAGE + cv::CALIB_CB_FAST_CHECK);
 
 		if(patternfound)
@@ -148,27 +163,26 @@ public:
 					Eigen::Vector3f translation(0.0, 0.0, 0.0);
 					Eigen::Quaternionf orientation(0.0, 0.0, 0.0, 0.0);
 					cv::Mat observation_points_ = board_corners;
-					cv::Mat tvec;//並進ベクトル
-					cv::Mat rvec;//回転行列
+
 					cv::Mat R;
 
-					//
-					cv::Mat ideal_points_ = calcChessboardCorners(cv::Size(8, 6), 0.025, cv::Point3f(0.0,0.0,0.0));
-
 					//画像上の２次元位置と空間内の３次元位置を対応付ける。
-					cv::solvePnP(ideal_points_, observation_points_, K, D, rvec, tvec, false);//cv::solvePnP(cv::Mat(ideal_points_), cv::Mat(observation_points_), K, D, rvec, tvec, false);
+					cv::solvePnP(ideal_points_, observation_points_, K, D, rvec, tvec, false);
+					//回転ベクトルを回転行列へ変換する。
 					cv::Rodrigues(rvec, R);
 					convertCVtoEigen(tvec, R, translation, orientation);
-
+					
 					//変換ベクトルを確認する。
-					ROS_INFO("%5.3f, %5.3f, %5.3f", translation.x(), translation.y(), translation.z());
+					//ROS_INFO("%5.3f %5.3f %5.3f %5.3f %5.3f %5.3f %5.3f", translation.x(), translation.y(), translation.z(), orientation.x(), orientation.y(), orientation.z(), orientation.w());
 
 					//変換ベクトルを登録する。
 					target_transform.setOrigin(tf::Vector3(translation.x(), translation.y(), translation.z()));
-					target_transform.setRotation(tf::Quaternion(orientation.x(), orientation.y(), orientation.z(), orientation.w()));
+					target_transform.setRotation(tf::Quaternion(orientation.x(), orientation.y(), orientation.z(), orientation.w()));//順番はx, y, z, wです。
 
-					//usb_camの原点はhead_camera
-					tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, ros::Time::now(), "camera_link", target_frame));
+					//usb_camの原点はcamera_link
+					tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, begin_, camera_frame, target_frame));
+					
+					//カメラは画像面がxy、奥行きがz軸
 			}
 			catch (tf::TransformException& ex)
 			{
@@ -207,7 +221,7 @@ public:
 				polylines(cv_ptr_->image, contours.at(i), true, cv::Scalar(0, 255, 0), 3);
 			}
 			
-			ROS_INFO("%+d (%.0f)", max_area_contour, max_area);
+			//ROS_INFO("%+d (%.0f)", max_area_contour, max_area);
 
 			//重心を求める。
 			if(max_area_contour != -1)//輪郭が点で表現されることがある。
@@ -223,9 +237,14 @@ public:
 				x/=count;
 				y/=count;
 				circle(cv_ptr_->image, cv::Point(x,y), 10, cv::Scalar(0,0,255), -1, CV_AA);
+				
+				pose_block.x = x;
+				pose_block.y = y;
 			}
 		}
 
+		
+		
 		//Segmentation
 		/*
 		Mat dist;
@@ -251,6 +270,98 @@ public:
 		}
 		 */
 
+		//重心を三次元空間へ変換する。
+		tf::StampedTransform transform;
+		try{
+			tf_listener_.lookupTransform(fixed_frame, camera_frame, begin_, transform);
+		}
+		catch (tf::TransformException ex)
+		{
+			ROS_ERROR("%s",ex.what());
+		}
+
+		geometry_msgs::PointStamped pose_block_3d, pose_block_3d2;
+		pose_block_3d.header.frame_id = camera_frame;//点の座標系
+		pose_block_3d2.header.frame_id = fixed_frame;//点の座標系
+		pose_block_3d.header.stamp = ros::Time();
+		pose_block_3d2.header.stamp = ros::Time();
+		pose_block_3d.point.x = 0.0f;
+		pose_block_3d.point.y = 0.0f;
+		pose_block_3d.point.z = 0.0f;
+		
+		std::vector<cv::Point3f> test_point3f;
+		std::vector<cv::Point2f> test_point2f;
+		
+		for (float i = 0; i < area_max.x; i += 0.001)
+		{
+			for (float j = 0; j < area_max.y; j += 0.001)
+			{
+				test_point3f.push_back(cv::Point3f(i, j, 0.0f));
+			}
+		}
+		//ROS_INFO("%f %f", area_max.x, area_max.y);
+		
+		try
+		{
+		    if(int(test_point3f.size()) > 0)
+		    {
+			    cv::projectPoints(test_point3f, rvec, tvec, K, D, test_point2f);
+		        //ROS_INFO("%f", float(test_point2f.size()));
+		    }
+		}
+		catch(cv::Exception& ex)
+		{
+			ROS_ERROR("cv exception:\n%s", ex.what());
+			return;
+		}
+		
+		float error, error_best = FLT_MAX;
+		float i_best = -1;
+		for (float i = 0; i < float(test_point2f.size()); i++)
+		{
+			error = sqrtf(pow(pose_block.x - test_point2f.at(i).x, 2)+pow(pose_block.y - test_point2f.at(i).y, 2));
+			if (error < error_best)
+			{
+				error_best = error;
+				i_best = i;
+				//ROS_INFO("%f, %f", error, i);
+			}
+		}
+		if(i_best != -1)
+		{
+			ROS_INFO("%f / %f", i_best, float(test_point2f.size()));
+			
+			pose_block_3d2.point.x = test_point3f.at(i_best).x;
+			pose_block_3d2.point.y = test_point3f.at(i_best).y;
+			pose_block_3d2.point.z = 0.0f;
+		}
+		else
+		{
+			ROS_WARN("Out of Area");
+		}
+				
+		try
+		{
+			//tf_listener_.transformPoint(camera_frame, begin_ - ros::Duration(1.0), pose_block_3d, fixed_frame, pose_block_3d2);
+			//listener.transformPoint("base_link", laser_point, base_point);
+			//tf_listener_.transformPoint(fixed_frame, pose_block_3d, pose_block_3d2);
+			
+			//ROS_INFO("1: %5.3f %5.3f %5.3f", pose_block_3d.point.x, pose_block_3d.point.y, pose_block_3d.point.z);
+			//ROS_INFO("2: %5.3f %5.3f %5.3f", pose_block_3d2.point.x, pose_block_3d2.point.y, pose_block_3d2.point.z);
+			//ROS_INFO("1: %s", pose_block_3d.header.frame_id.c_str());
+			//ROS_INFO("2: %s", pose_block_3d2.header.frame_id.c_str());
+		}
+		catch(tf::TransformException& ex)
+		{
+			ROS_ERROR("tf exception:\n%s", ex.what());
+			return;
+		}
+
+		
+		//geometry_msgs::Pose pose_result;
+		//pose_result.position.y = pose_block_3d2.point.y;
+		//pose_result.position.z = pose_block_3d2.point.z;
+		
 		//結果の表示
 		cv::imshow(WINDOW_O, cv_ptr_->image);//処理前
 		cv::waitKey(10);
@@ -259,9 +370,10 @@ public:
 		//cv::imshow(WINDOW_R, cv_ptr_->image);//処理後
 		//cv::waitKey(10);
 
+		
 		//結果の出力
 		image_pub_.publish(cv_ptr_->toImageMsg());
-		pose_pub_.publish(pose_block);
+		pose_pub_.publish(pose_block_3d2);
 	}
 
 };

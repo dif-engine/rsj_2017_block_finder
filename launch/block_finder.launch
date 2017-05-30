@@ -4,6 +4,7 @@
   <param name="image_width" value="640"/>
   <param name="image_height" value="480"/>
   <param name="pixel_format" value="yuyv"/>
+  <param name="camera_frame_id" value="camera_link"/>
  </node>
 <!--
   <node name="image_view" pkg="image_view" type="image_view" output="screen">
@@ -12,6 +13,6 @@
   </node>
 -->
  <node pkg="image_processing" type="block_finder" name="block_finder" output="screen"/>
- <node pkg="tf" type="static_transform_publisher" name="camera_transform_publisher" args="0.318846 -0.0190363 0.49518 0.735879 0.657887 -0.111644 -0.114901 /world /camera_link 100"/>
- <!--<node pkg="rviz" type="rviz" name="rviz" args="-d $(find PACKAGE_NAME)/image_processing.rviz"/>-->
+ <node pkg="tf" type="static_transform_publisher" name="camera_transform_publisher" args="-0.134 -0.043 0.476 -0.299 -0.084 -0.199 0.929 /world /camera_link 100"/>
+ <node pkg="rviz" type="rviz" name="rviz" args="-d image_processing.rviz"/>
 </launch>
