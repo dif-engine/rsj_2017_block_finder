@@ -12,7 +12,7 @@
     <param name="autosize" value="true" />
   </node>
 -->
- <node pkg="image_processing" type="block_finder" name="block_finder" output="screen"/>
+ <node pkg="rsj_2017_block_finder" type="block_finder" name="block_finder" output="screen"/>
  <node pkg="tf" type="static_transform_publisher" name="camera_transform_publisher" args="-0.118 -0.039 0.474 -0.293 -0.075 -0.191 0.934 /camera_link /world 100"/>
- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find image_processing)/image_processing.rviz"/>
+ <node pkg="rviz" type="rviz" name="rviz" args="-d $(find rsj_2017_block_finder)/rsj_2017_block_finder.rviz"/>
 </launch>

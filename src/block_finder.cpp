@@ -24,6 +24,7 @@ static float EST_RESOLUTION = 0.001;
 
 class BlockFinder
 {
+	
 	ros::NodeHandle nh_;
 	image_transport::ImageTransport it_;
 	image_transport::Subscriber image_sub_;

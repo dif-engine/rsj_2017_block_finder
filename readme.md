@@ -1,2 +1,2 @@
-# image_processing
-RSJ Seminar
+# rsj_2017_block_finder
+RSJ Seminar 2017
