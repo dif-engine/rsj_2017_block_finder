@@ -102,7 +102,8 @@ public:
 		info_sub_ = nh_.subscribe("/usb_cam_node/camera_info", 1, &BlockFinder::infoCallback, this);
 		image_sub_ = it_.subscribe("/usb_cam_node/image_raw", 1, &BlockFinder::imageCb, this);
 		image_pub_ = it_.advertise("/block_finder/image_block", 1);
-		pose_pub_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose", 1);
+		//pose_pub_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose", 1);
+		pose_pub_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose", 1);
 
 		nh_.param<std::string>("fixed_frame", fixed_frame, "/world");
 		nh_.param<std::string>("camera_frame", camera_frame, "/camera_link");
@@ -356,7 +357,7 @@ public:
 		image_pub_.publish(cv_img_ptr->toImageMsg());
 		if(is_block)
 		{
-			pose_pub_.publish(pose3d_block);
+			pose_pub_.publish(pose2d_block);
 			is_block = false;
 		}
 	}
