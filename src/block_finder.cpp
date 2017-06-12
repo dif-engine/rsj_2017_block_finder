@@ -17,6 +17,7 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
 //
+#include <string>
 #include <vector>
 #include <iostream>
 #include <pcl_ros/transforms.h>//#include <Eigen/Geometry>
@@ -28,6 +29,8 @@ static const std::string WINDOW_R = "Result";
 static int method_num = 0;
 static int threshold_bin = 160;
 static float EST_RESOLUTION = 0.001;
+
+static int int_method;
 
 class BlockFinder
 {
@@ -62,10 +65,10 @@ class BlockFinder
 	cv::Mat mat_img_result;
 
 	bool is_param;
-	bool is_block;
+	
+
 
 public:
-
 	void convertCVtoEigen(const cv::Mat& tvec, const cv::Mat& R, Eigen::Vector3f& translation, Eigen::Quaternionf& orientation)
 	{
 		// This assumes that cv::Mats are stored as doubles. Is there a way to check this?
@@ -110,7 +113,10 @@ public:
 
 
 	BlockFinder(): it_(nh_)
-	{
+	{	
+		//ROS_INFO("OpenCV Version: %s",CV_VERSION);
+		ROS_INFO("OpenCV Version: %d.%d",CV_MAJOR_VERSION, CV_MINOR_VERSION);
+		
 		info_sub_ = nh_.subscribe("/usb_cam_node/camera_info", 1, &BlockFinder::infoCallback, this);
 		image_sub_ = it_.subscribe("/usb_cam_node/image_raw", 1, &BlockFinder::imageCb, this);
 		image_pub_ = it_.advertise("/block_finder/image_block", 1);
@@ -121,6 +127,10 @@ public:
 		nh_.param<std::string>("camera_frame", camera_frame, "/camera_link");
 		nh_.param<std::string>("target_frame", target_frame, "/pattern_link");
 
+		
+	    //nh_.getParam("method", int_method);
+	    ROS_INFO("Method %d selected!", int_method);
+		
 		cv::namedWindow(WINDOW_O);
 		cv::namedWindow(WINDOW_R);
 		cv::moveWindow(WINDOW_O, 0, 0);
@@ -133,7 +143,6 @@ public:
 		pMOG2 = cv::createBackgroundSubtractorMOG2();
 
 		is_param = false;
-		is_block = false;
 	}
 
 	~BlockFinder()
@@ -150,16 +159,15 @@ public:
 		pose2d_block.y = 0.0f;
 		pose2d_block.theta = 0.0f;
 
-		if (method == 0)
+		if (method == 1)
 		{
 			//二値化する。
 			cv::Mat mat_img_bin, mat_img_bin_temp;
-			cv::medianBlur(mat_img_input_g, mat_img_input_g, 3);
+			cv::GaussianBlur(mat_img_input_g, mat_img_input_g, cv::Size(9,9), 0, 0);//両方とも正の奇数
+			//cv::medianBlur(mat_img_input_g, mat_img_input_g, 3);
 
+			cv::threshold(mat_img_input_g, mat_img_bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 			cv::threshold(mat_img_input_g, mat_img_bin, threshold_bin, 255, cv::THRESH_BINARY);
-
-
-
 
 			//輪郭を求める。
 			std::vector<std::vector<cv::Point> > contours;//輪郭を表現するベクトル
@@ -202,43 +210,61 @@ public:
 					pose2d_block.y = y;
 				}
 			}
-			mat_img_result = mat_img_input_c.clone();
+			mat_img_result = mat_img_bin.clone();
 		}
-		else if(method = 1)
+		else if(method == 2)
 		{
 			cv::Mat mat_img_mask, mat_img_blur, mat_img_mog;
 			cv::Mat mat_img_mask_bin;
 
-			cv::GaussianBlur(mat_img_input_c, mat_img_blur, cv::Size(5,5), 0, 0);
+			cv::GaussianBlur(mat_img_input_c, mat_img_blur, cv::Size(9,9), 0, 0);
 			pMOG2->apply(mat_img_blur, mat_img_mask);
 			//オープニング処理でノイズを除去する。
 			cv::morphologyEx(mat_img_mask, mat_img_mask, cv::MORPH_OPEN, cv::Mat(), cv::Point(-1, -1), 3);
 			//ビット毎の論理積を求める。
 			cv::bitwise_and(mat_img_input_c, mat_img_input_c, mat_img_mog, mat_img_mask);
 
-			//mat_img_result = mat_img_mog.clone();
-			mat_img_result = mat_img_mask.clone();
-
-			cv::threshold(mat_img_mask, mat_img_mask_bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-
+			cv::threshold(mat_img_mask, mat_img_mask_bin, threshold_bin, 255, cv::THRESH_BINARY);
+			
 			//ラベリングを行う。OpenCV3.0から
 			cv::Mat LabelImg;
 			cv::Mat stats;
 			cv::Mat centroids;
 			int nLab = cv::connectedComponentsWithStats(mat_img_mask_bin, LabelImg, stats, centroids);
 
-			//面積を求める。
+			//最大面積を求める。
+			double double_max_area = 0.0;
+			int int_max_area_num = -1;
 			for (int i = 1; i < nLab; ++i)
 			{
 				int *param = stats.ptr<int>(i);
-				ROS_INFO("(%d) %d", i, param[4]);//ROS_INFO("(%d) %d", i, param[cv::ConnectedComponentsTypes::CC_STAT_AREA]);
 				
-				pose2d_block.x = static_cast<int>(param[0] + param[2]/2);
-				pose2d_block.y = static_cast<int>(param[1] + param[3]/2);
+				if(param[4] > double_max_area)
+				{
+					double_max_area = param[4];
+					int_max_area_num = i;
+				}
 			}
 
+			//最大面積を有するクラスターの中心点を求める。
+			if(int_max_area_num != -1)
+			{
+				int *param = stats.ptr<int>(int_max_area_num);
+				//ROS_INFO("(%d) %d", int_max_area_num, param[4]);
+				
+				cv::Point pose2d_block_disp;
+				pose2d_block_disp.x = pose2d_block.x = static_cast<int>(param[0] + param[2]/2);
+				pose2d_block_disp.y = pose2d_block.y = static_cast<int>(param[1] + param[3]/2);
+				
+				circle(mat_img_input_c, pose2d_block_disp, 8, cv::Scalar(0,0,255), -1, CV_AA);
+			}
+			
+			mat_img_result = mat_img_mask_bin.clone();
 		}
-
+		else
+		{
+			ROS_WARN("No method selected!");
+		}
 
 		return pose2d_block;
 	}
@@ -246,6 +272,8 @@ public:
 
 	void imageCb(const sensor_msgs::ImageConstPtr& msg)
 	{
+		bool is_block = false;
+		
 		begin_ = ros::Time::now();
 
 		geometry_msgs::Pose2D pose2d_block;//画像中のブロックの位置
@@ -294,31 +322,31 @@ public:
 					cv::Rodrigues(rvec, R);
 					//OpenCVからEigenへ変換する。
 					convertCVtoEigen(tvec, R, translation, orientation);
-					//変換ベクトルを確認する。
-					//ROS_INFO("%5.3f %5.3f %5.3f %5.3f %5.3f %5.3f %5.3f", translation.x(), translation.y(), translation.z(), orientation.x(), orientation.y(), orientation.z(), orientation.w());
 					//変換ベクトルを登録する。
 					target_transform.setOrigin(tf::Vector3(translation.x(), translation.y(), translation.z()));
 					target_transform.setRotation(tf::Quaternion(orientation.x(), orientation.y(), orientation.z(), orientation.w()));
 					//フレームを発信する。
 					tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, begin_, camera_frame, target_frame));
-					//フラグを変更する。
+					//フラグを変更し、変換ベクトルを確認する。
 					is_param = true;
 					ROS_INFO("Chessboard detected!");
+					ROS_INFO("%5.3f %5.3f %5.3f %5.3f %5.3f %5.3f %5.3f", translation.x(), translation.y(), translation.z(), orientation.x(), orientation.y(), orientation.z(), orientation.w());
+
 				}
 				catch (tf::TransformException& ex)
 				{
-					ROS_ERROR("TF exception:\n%s", ex.what());
+					ROS_ERROR("TF Exception:\n%s", ex.what());
 					return;
 				}
 			}
 			else
 			{
-				//ROS_INFO("No Chessboard");
+				ROS_INFO("No Chessboard found!");
 			}
 		}
 
 		//画像を処理する。
-		pose2d_block = rsjImageProcessing(mat_img_color, mat_img_gray, 0);
+		pose2d_block = rsjImageProcessing(mat_img_color, mat_img_gray, int_method);
 		geometry_msgs::PointStamped pose3d_block;
 
 		if(!tvec.empty())
@@ -353,7 +381,7 @@ public:
 				}
 				catch(cv::Exception& ex)
 				{
-					ROS_ERROR("cv exception:\n%s", ex.what());
+					ROS_ERROR("CV Exception:\n%s", ex.what());
 					return;
 				}
 			}
@@ -379,11 +407,10 @@ public:
 				pose3d_block.point.x = vec_point3f_block.at(i_best).x;
 				pose3d_block.point.y = vec_point3f_block.at(i_best).y;
 				pose3d_block.point.z = 0.0f;
-				is_block = true;
 			}
 			else
 			{
-				ROS_INFO("Out of Area");
+				ROS_INFO("Out of Detectable Area");
 			}
 
 			//ブロックの位置をカメラ座標系へ変換する。
@@ -393,15 +420,29 @@ public:
 			}
 			catch(tf::TransformException& ex)
 			{
-				ROS_ERROR("tf exception:\n%s", ex.what());
+				ROS_ERROR("TF Exception:\n%s", ex.what());
 				return;
 			}
-
-			//黄色の範囲
+			
+			//検出可能範囲を表示する。（順序を入れ替える。）
 			cv::Point vec_point_area_board_temp = vec_point_area_board[2];
 			vec_point_area_board.erase(vec_point_area_board.begin() + 2);
 			vec_point_area_board.push_back(vec_point_area_board_temp);
 			polylines(mat_img_color, vec_point_area_board, true, cv::Scalar(0, 255, 255), 2);
+			
+			//検出可能範囲の内側かを判定する。
+			cv::Point2f pose2d_block_test;
+			pose2d_block_test.x = pose2d_block.x;
+			pose2d_block_test.y = pose2d_block.y;
+			if(cv::pointPolygonTest(vec_point_area_board, pose2d_block_test, false) != -1)
+			{
+				is_block = true;
+				//ROS_INFO("IN");
+			}
+			else
+			{
+				//ROS_INFO("OUT");				
+			}
 		}
 
 		//画像の表示
@@ -417,15 +458,23 @@ public:
 			ROS_INFO("(%.0f, %.0f)", pose2d_block.x, pose2d_block.y);
 			pose_pub_.publish(pose2d_block);
 			pose_pub3d_.publish(pose3d_block);
-			is_block = false;
 		}
 	}
 };
 
 int main(int argc, char** argv)
 {
+	for (int i = 0; i < argc; i++)
+	{
+		std::cout << "arg[" << i << "]: " << argv[i] << std::endl;
+	}
+	
+	int_method = std::stoi(argv[1]);
+	
 	ros::init(argc, argv, "block_finder");
+	
 	BlockFinder bf;
+	
 	ros::spin();
 	return 0;
 }

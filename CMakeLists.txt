@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(rsj_2017_block_finder)
 
 ## Add support for C++11, supported in ROS Kinetic and newer
-# add_definitions(-std=c++11)
+add_definitions(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -204,4 +204,4 @@ catkin_package(
 find_package( OpenCV REQUIRED )
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} )
 add_executable(block_finder src/block_finder.cpp)
-target_link_libraries(block_finder ${OpenCV_LIBRARIES} ${catkin_LIBRARIES} )
+target_link_libraries(block_finder ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} )
