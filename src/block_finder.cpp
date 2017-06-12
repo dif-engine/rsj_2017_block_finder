@@ -166,7 +166,7 @@ public:
 			cv::GaussianBlur(mat_img_input_g, mat_img_input_g, cv::Size(9,9), 0, 0);//両方とも正の奇数
 			//cv::medianBlur(mat_img_input_g, mat_img_input_g, 3);
 
-			cv::threshold(mat_img_input_g, mat_img_bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+			//cv::threshold(mat_img_input_g, mat_img_bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 			cv::threshold(mat_img_input_g, mat_img_bin, threshold_bin, 255, cv::THRESH_BINARY);
 
 			//輪郭を求める。
