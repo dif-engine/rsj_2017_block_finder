@@ -2,11 +2,12 @@
 <launch>
  <rosparam command="load" file="$(find rsj_2017_block_finder)/config/block_finder.yaml" />
  <node pkg="usb_cam" type="usb_cam_node" name="usb_cam_node" output="screen">
-  <param name="video_device" value="/dev/video0" />
+  <param name="video_device" value="/dev/video0"/>
   <param name="image_width" value="640"/>
   <param name="image_height" value="480"/>
   <param name="pixel_format" value="yuyv"/>
   <param name="camera_frame_id" value="camera_link"/>
+  <param name="framerate" value="30"/>
  </node>
 <!--
   <node name="image_view" pkg="image_view" type="image_view" output="screen">

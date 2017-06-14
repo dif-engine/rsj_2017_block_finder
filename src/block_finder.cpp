@@ -27,7 +27,7 @@ static const std::string WINDOW_O = "Original";
 static const std::string WINDOW_R = "Result";
 
 static int method_num = 0;
-static int threshold_bin = 160;
+static int threshold_bin = 155;
 static float EST_RESOLUTION = 0.001;
 
 static int int_method;
