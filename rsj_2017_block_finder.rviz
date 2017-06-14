@@ -84,7 +84,7 @@ Visualization Manager:
       History Length: 1
       Name: PointStamped
       Radius: 0.0500000007
-      Topic: /block_finder/pose3d
+      Topic: /block_finder/pose_point
       Unreliable: false
       Value: true
   Enabled: true
@@ -111,7 +111,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.98193097
+      Distance: 2.90731883
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1

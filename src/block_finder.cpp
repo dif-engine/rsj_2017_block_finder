@@ -40,8 +40,8 @@ class BlockFinder
 	image_transport::Subscriber image_sub_;
 	image_transport::Publisher image_pub_;
 	ros::Subscriber info_sub_;
-	ros::Publisher pose_pub_;
-	ros::Publisher pose_pub3d_;
+	ros::Publisher pose_pub2d_;
+	ros::Publisher pose_pub3d_, pose_pub3d_disp_;
 	ros::Time begin_;//現在時刻
 	tf::TransformListener tf_listener_;
 	tf::TransformBroadcaster tf_broadcaster_;
@@ -120,8 +120,9 @@ public:
 		info_sub_ = nh_.subscribe("/usb_cam_node/camera_info", 1, &BlockFinder::infoCallback, this);
 		image_sub_ = it_.subscribe("/usb_cam_node/image_raw", 1, &BlockFinder::imageCb, this);
 		image_pub_ = it_.advertise("/block_finder/image_block", 1);
-		pose_pub_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose", 1);
-		pose_pub3d_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose3d", 1);
+		pose_pub2d_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose_image", 1);
+		pose_pub3d_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose", 1);
+		pose_pub3d_disp_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose_point", 1);
 
 		nh_.param<std::string>("fixed_frame", fixed_frame, "/world");
 		nh_.param<std::string>("camera_frame", camera_frame, "/camera_link");
@@ -277,8 +278,8 @@ public:
 		begin_ = ros::Time::now();
 
 		geometry_msgs::Pose2D pose2d_block;//画像のブロックの位置
-		geometry_msgs::Pose2D pose3d_block_pose2d;//空間のブロックの位置
-		geometry_msgs::PointStamped pose3d_block;
+		geometry_msgs::Pose2D pose2d_block_3d;//空間のブロックの位置
+		geometry_msgs::PointStamped point_block_disp;//空間のブロックの位置（表示用）
 
 		cv::Size patternsize(8,6);
 		cv::Mat board_corners;
@@ -354,9 +355,9 @@ public:
 		{
 			//ブロックの位置を三次元空間へ変換する。
 			geometry_msgs::PointStamped pose3d_block_tf;
-			pose3d_block.header.frame_id = fixed_frame;
+			point_block_disp.header.frame_id = fixed_frame;
 			pose3d_block_tf.header.frame_id = camera_frame;
-			pose3d_block.header.stamp = ros::Time();
+			point_block_disp.header.stamp = ros::Time();
 			pose3d_block_tf.header.stamp = ros::Time();
 			//
 			std::vector<cv::Point3f> vec_point3f_block;
@@ -405,10 +406,10 @@ public:
 			{
 				//ROS_INFO("%.0f / %.0f", i_best, float(vec_point2f_block.size()));
 
-				pose3d_block_pose2d.x = pose3d_block.point.x = vec_point3f_block.at(i_best).x;
-				pose3d_block_pose2d.y = pose3d_block.point.y = vec_point3f_block.at(i_best).y;
-				pose3d_block.point.z = 0.0f;
-				pose3d_block_pose2d.theta = 0.0f;
+				pose2d_block_3d.x = point_block_disp.point.x = vec_point3f_block.at(i_best).x;
+				pose2d_block_3d.y = point_block_disp.point.y = vec_point3f_block.at(i_best).y;
+				point_block_disp.point.z = 0.0f;
+				pose2d_block_3d.theta = 0.0f;
 			}
 			else
 			{
@@ -418,7 +419,7 @@ public:
 			//ブロックの位置をカメラ座標系へ変換する。
 			try
 			{
-				tf_listener_.transformPoint(fixed_frame, begin_, pose3d_block, camera_frame, pose3d_block_tf);
+				tf_listener_.transformPoint(fixed_frame, begin_, point_block_disp, camera_frame, pose3d_block_tf);
 			}
 			catch(tf::TransformException& ex)
 			{
@@ -457,10 +458,11 @@ public:
 		image_pub_.publish(cv_img_ptr->toImageMsg());
 		if(is_block)
 		{
-			ROS_INFO("(%.0f, %.0f)", pose2d_block.x, pose2d_block.y);
+			//ROS_INFO("(%.0f, %.0f)", pose2d_block.x, pose2d_block.y);
 			
-			pose_pub_.publish(pose3d_block_pose2d);
-			pose_pub3d_.publish(pose3d_block);
+			pose_pub2d_.publish(pose2d_block);
+			pose_pub3d_.publish(pose2d_block_3d);
+			pose_pub3d_disp_.publish(point_block_disp);
 		}
 	}
 };
