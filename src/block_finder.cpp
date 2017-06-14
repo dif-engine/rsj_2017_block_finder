@@ -276,7 +276,9 @@ public:
 		
 		begin_ = ros::Time::now();
 
-		geometry_msgs::Pose2D pose2d_block;//画像中のブロックの位置
+		geometry_msgs::Pose2D pose2d_block;//画像のブロックの位置
+		geometry_msgs::Pose2D pose3d_block_pose2d;//空間のブロックの位置
+		geometry_msgs::PointStamped pose3d_block;
 
 		cv::Size patternsize(8,6);
 		cv::Mat board_corners;
@@ -347,7 +349,6 @@ public:
 
 		//画像を処理する。
 		pose2d_block = rsjImageProcessing(mat_img_color, mat_img_gray, int_method);
-		geometry_msgs::PointStamped pose3d_block;
 
 		if(!tvec.empty())
 		{
@@ -404,9 +405,10 @@ public:
 			{
 				//ROS_INFO("%.0f / %.0f", i_best, float(vec_point2f_block.size()));
 
-				pose3d_block.point.x = vec_point3f_block.at(i_best).x;
-				pose3d_block.point.y = vec_point3f_block.at(i_best).y;
+				pose3d_block_pose2d.x = pose3d_block.point.x = vec_point3f_block.at(i_best).x;
+				pose3d_block_pose2d.y = pose3d_block.point.y = vec_point3f_block.at(i_best).y;
 				pose3d_block.point.z = 0.0f;
+				pose3d_block_pose2d.theta = 0.0f;
 			}
 			else
 			{
@@ -447,16 +449,17 @@ public:
 
 		//画像の表示
 		cv::imshow(WINDOW_O, mat_img_color);//処理前
-		cv::waitKey(10);
+		//cv::waitKey(50);//[ms]
 		cv::imshow(WINDOW_R, mat_img_result);//処理後
-		cv::waitKey(10);
+		cv::waitKey(50);//[ms]
 
 		//結果の出力
 		image_pub_.publish(cv_img_ptr->toImageMsg());
 		if(is_block)
 		{
 			ROS_INFO("(%.0f, %.0f)", pose2d_block.x, pose2d_block.y);
-			pose_pub_.publish(pose2d_block);
+			
+			pose_pub_.publish(pose3d_block_pose2d);
 			pose_pub3d_.publish(pose3d_block);
 		}
 	}
