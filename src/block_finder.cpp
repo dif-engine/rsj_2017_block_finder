@@ -1,22 +1,20 @@
 #include <ros/ros.h>//ROSを使用するときは必ずincludeする。
-#include <geometry_msgs/Pose2D.h>//PoseやTwistを使用する場合は適宜includeする。
 #include <std_msgs/String.h>
+#include <std_msgs/Int32.h>
+#include <geometry_msgs/Pose2D.h>//PoseやTwistを使用する場合は適宜includeする。
+#include <geometry_msgs/PoseStamped.h>
 #include <image_transport/image_transport.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <tf2/LinearMath/Quaternion.h>
-#include <geometry_msgs/PoseStamped.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
-//
 #include <opencv2/opencv.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/calib3d.hpp>
-#include <opencv2/imgcodecs.hpp>
-//
 #include <string>
 #include <vector>
 #include <iostream>
@@ -27,7 +25,7 @@ static const std::string WINDOW_O = "Original";
 static const std::string WINDOW_R = "Result";
 
 static int method_num = 0;
-static int threshold_bin = 155;
+static int threshold_bin = 150;
 static float EST_RESOLUTION = 0.001;
 
 static int int_method;
@@ -41,8 +39,11 @@ class BlockFinder
 	image_transport::Publisher image_pub_;
 	ros::Subscriber info_sub_;
 	ros::Publisher pose_pub2d_;
-	ros::Publisher pose_pub3d_, pose_pub3d_disp_;
-	ros::Time begin_;//現在時刻
+	ros::Publisher pose_pub3d_;
+	ros::Publisher pose_pub3d_pattern_;
+	ros::Publisher pose_pub3d_world_;
+	ros::Publisher pose_block_size_;
+	//ros::Time begin_;//現在時刻
 	tf::TransformListener tf_listener_;
 	tf::TransformBroadcaster tf_broadcaster_;
 
@@ -64,9 +65,11 @@ class BlockFinder
 
 	cv::Mat mat_img_result;
 
-	bool is_param;
+	tf::Transform target_transform;
 	
+	int int_max_area;
 
+	bool is_param;
 
 public:
 	void convertCVtoEigen(const cv::Mat& tvec, const cv::Mat& R, Eigen::Vector3f& translation, Eigen::Quaternionf& orientation)
@@ -114,32 +117,32 @@ public:
 
 	BlockFinder(): it_(nh_)
 	{	
-		//ROS_INFO("OpenCV Version: %s",CV_VERSION);
 		ROS_INFO("OpenCV Version: %d.%d",CV_MAJOR_VERSION, CV_MINOR_VERSION);
-		
+
 		info_sub_ = nh_.subscribe("/usb_cam_node/camera_info", 1, &BlockFinder::infoCallback, this);
 		image_sub_ = it_.subscribe("/usb_cam_node/image_raw", 1, &BlockFinder::imageCb, this);
+
 		image_pub_ = it_.advertise("/block_finder/image_block", 1);
 		pose_pub2d_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose_image", 1);
 		pose_pub3d_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose", 1);
-		pose_pub3d_disp_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose_point", 1);
+		pose_pub3d_pattern_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose_point_pattern", 1);
+		pose_pub3d_world_ = nh_.advertise<geometry_msgs::PointStamped>("/block_finder/pose_point_world", 1);
+		pose_block_size_ = nh_.advertise<std_msgs::Int32>("/block_finder/block_size_max", 1);
 
 		nh_.param<std::string>("fixed_frame", fixed_frame, "/world");
 		nh_.param<std::string>("camera_frame", camera_frame, "/camera_link");
 		nh_.param<std::string>("target_frame", target_frame, "/pattern_link");
 
-		
-	    //nh_.getParam("method", int_method);
-	    ROS_INFO("Method %d selected!", int_method);
-		
+		ROS_INFO("Method %d selected!", int_method);
+
 		cv::namedWindow(WINDOW_O);
 		cv::namedWindow(WINDOW_R);
 		cv::moveWindow(WINDOW_O, 0, 0);
-		cv::moveWindow(WINDOW_R, 0, 500);//640, 0
+		cv::moveWindow(WINDOW_R, 0, 550);//640, 0
 		cv::createTrackbar("Subtracter", WINDOW_R, &threshold_bin, 255);
 
 		//３次元位置を求める。
-		ideal_points_ = calcChessboardCorners(cv::Size(8, 6), 0.025, cv::Point3f(0.0,0.0,0.0));
+		ideal_points_ = calcChessboardCorners(cv::Size(8, 6), 0.0285, cv::Point3f(0.0,0.0,0.0));
 
 		pMOG2 = cv::createBackgroundSubtractorMOG2();
 
@@ -226,7 +229,7 @@ public:
 			cv::bitwise_and(mat_img_input_c, mat_img_input_c, mat_img_mog, mat_img_mask);
 
 			cv::threshold(mat_img_mask, mat_img_mask_bin, threshold_bin, 255, cv::THRESH_BINARY);
-			
+
 			//ラベリングを行う。OpenCV3.0から
 			cv::Mat LabelImg;
 			cv::Mat stats;
@@ -234,15 +237,15 @@ public:
 			int nLab = cv::connectedComponentsWithStats(mat_img_mask_bin, LabelImg, stats, centroids);
 
 			//最大面積を求める。
-			double double_max_area = 0.0;
+			int_max_area = 0;
 			int int_max_area_num = -1;
 			for (int i = 1; i < nLab; ++i)
 			{
 				int *param = stats.ptr<int>(i);
-				
-				if(param[4] > double_max_area)
+
+				if(param[4] > int_max_area)
 				{
-					double_max_area = param[4];
+					int_max_area = param[4];
 					int_max_area_num = i;
 				}
 			}
@@ -252,14 +255,14 @@ public:
 			{
 				int *param = stats.ptr<int>(int_max_area_num);
 				//ROS_INFO("(%d) %d", int_max_area_num, param[4]);
-				
+
 				cv::Point pose2d_block_disp;
 				pose2d_block_disp.x = pose2d_block.x = static_cast<int>(param[0] + param[2]/2);
 				pose2d_block_disp.y = pose2d_block.y = static_cast<int>(param[1] + param[3]/2);
-				
+
 				circle(mat_img_input_c, pose2d_block_disp, 8, cv::Scalar(0,0,255), -1, CV_AA);
 			}
-			
+
 			mat_img_result = mat_img_mask_bin.clone();
 		}
 		else
@@ -274,12 +277,13 @@ public:
 	void imageCb(const sensor_msgs::ImageConstPtr& msg)
 	{
 		bool is_block = false;
-		
-		begin_ = ros::Time::now();
 
-		geometry_msgs::Pose2D pose2d_block;//画像のブロックの位置
-		geometry_msgs::Pose2D pose2d_block_3d;//空間のブロックの位置
-		geometry_msgs::PointStamped point_block_disp;//空間のブロックの位置（表示用）
+		//begin_ = ros::Time::now();
+
+		geometry_msgs::Pose2D pose2d_block;  // 画像のブロックの位置
+		geometry_msgs::Pose2D pose2d_block_3d;  // 空間のブロックの位置
+		geometry_msgs::PointStamped point_block_disp;  // pattern座標系 空間のブロックの位置（表示用）
+		geometry_msgs::PointStamped pose3d_block_tf;  // world座標系
 
 		cv::Size patternsize(8,6);
 		cv::Mat board_corners;
@@ -310,7 +314,7 @@ public:
 				cv::drawChessboardCorners(mat_img_gray, patternsize, board_corners, patternfound);
 				try
 				{
-					tf::Transform target_transform;
+
 					tf::StampedTransform base_transform;
 
 					Eigen::Vector3f translation(0.0f, 0.0f, 0.0f);
@@ -328,8 +332,6 @@ public:
 					//変換ベクトルを登録する。
 					target_transform.setOrigin(tf::Vector3(translation.x(), translation.y(), translation.z()));
 					target_transform.setRotation(tf::Quaternion(orientation.x(), orientation.y(), orientation.z(), orientation.w()));
-					//フレームを発信する。
-					tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, begin_, camera_frame, target_frame));
 					//フラグを変更し、変換ベクトルを確認する。
 					is_param = true;
 					ROS_INFO("Chessboard detected!");
@@ -347,19 +349,29 @@ public:
 				ROS_INFO("No Chessboard found!");
 			}
 		}
+		
+		// target_transformが設定済みなら
+		if(target_transform.getOrigin().length() > 0)
+		{
+			// フレームを発信する。
+			tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, ros::Time::now() - ros::Duration(0.1), camera_frame, target_frame));//tf_broadcaster_.sendTransform(tf::StampedTransform(target_transform, begin_, camera_frame, target_frame));
+			
+		}
 
 		//画像を処理する。
 		pose2d_block = rsjImageProcessing(mat_img_color, mat_img_gray, int_method);
 
+		//検出範囲が求まっているなら、
 		if(!tvec.empty())
 		{
 			//ブロックの位置を三次元空間へ変換する。
-			geometry_msgs::PointStamped pose3d_block_tf;
-			point_block_disp.header.frame_id = fixed_frame;
-			pose3d_block_tf.header.frame_id = camera_frame;
-			point_block_disp.header.stamp = ros::Time();
-			pose3d_block_tf.header.stamp = ros::Time();
-			//
+			
+			point_block_disp.header.frame_id = target_frame;
+			pose3d_block_tf.header.frame_id = fixed_frame;
+			
+			//point_block_disp.header.stamp = ros::Time::now();//ros::Time();
+			//pose3d_block_tf.header.stamp = ros::Time::now();//ros::Time();
+			
 			std::vector<cv::Point3f> vec_point3f_block;
 			std::vector<cv::Point2f> vec_point2f_block;
 			//ROS_INFO("x: %f, y: %f",point3f_area_max_.x, point3f_area_max_.y);
@@ -371,9 +383,9 @@ public:
 				}
 			}
 			int int_count_horizontal = int(floor(point3f_area_max_.x/EST_RESOLUTION));
-			int int_count_vertical =  int(floor(point3f_area_max_.y/EST_RESOLUTION));
-			std::vector<cv::Point> vec_point_area_board;//検出可能範囲
+			//int int_count_vertical =  int(floor(point3f_area_max_.y/EST_RESOLUTION));
 			//ROS_INFO("v: %d, h: %d",int_count_vertical, int_count_horizontal);
+			std::vector<cv::Point> vec_point_area_board;//検出可能範囲
 			if(int(vec_point3f_block.size()) > 0)
 			{
 				try
@@ -383,7 +395,7 @@ public:
 				}
 				catch(cv::Exception& ex)
 				{
-					ROS_ERROR("CV Exception:\n%s", ex.what());
+					ROS_ERROR("CV Exception: %s", ex.what());
 					return;
 				}
 			}
@@ -403,9 +415,7 @@ public:
 				}		
 			}
 			if(i_best != -1)
-			{
-				//ROS_INFO("%.0f / %.0f", i_best, float(vec_point2f_block.size()));
-
+			{			
 				pose2d_block_3d.x = point_block_disp.point.x = vec_point3f_block.at(i_best).x;
 				pose2d_block_3d.y = point_block_disp.point.y = vec_point3f_block.at(i_best).y;
 				point_block_disp.point.z = 0.0f;
@@ -419,20 +429,24 @@ public:
 			//ブロックの位置をカメラ座標系へ変換する。
 			try
 			{
-				tf_listener_.transformPoint(fixed_frame, begin_, point_block_disp, camera_frame, pose3d_block_tf);
+				ros::Time now = ros::Time::now();
+				tf_listener_.waitForTransform(target_frame, fixed_frame, now, ros::Duration(0.1));
+				
+				//tf_listener_.transformPoint(fixed_frame, begin_, point_block_disp, camera_frame, pose3d_block_tf);
+				tf_listener_.transformPoint(fixed_frame, point_block_disp, pose3d_block_tf);//移動先のframe名、移動元、移動先
 			}
 			catch(tf::TransformException& ex)
 			{
-				ROS_ERROR("TF Exception:\n%s", ex.what());
+				ROS_ERROR("TF Exception: %s", ex.what());
 				return;
 			}
-			
+
 			//検出可能範囲を表示する。（順序を入れ替える。）
 			cv::Point vec_point_area_board_temp = vec_point_area_board[2];
 			vec_point_area_board.erase(vec_point_area_board.begin() + 2);
 			vec_point_area_board.push_back(vec_point_area_board_temp);
 			polylines(mat_img_color, vec_point_area_board, true, cv::Scalar(0, 255, 255), 2);
-			
+
 			//検出可能範囲の内側かを判定する。
 			cv::Point2f pose2d_block_test;
 			pose2d_block_test.x = pose2d_block.x;
@@ -440,29 +454,35 @@ public:
 			if(cv::pointPolygonTest(vec_point_area_board, pose2d_block_test, false) != -1)
 			{
 				is_block = true;
-				//ROS_INFO("IN");
-			}
-			else
-			{
-				//ROS_INFO("OUT");				
 			}
 		}
 
-		//画像の表示
-		cv::imshow(WINDOW_O, mat_img_color);//処理前
-		//cv::waitKey(50);//[ms]
-		cv::imshow(WINDOW_R, mat_img_result);//処理後
-		cv::waitKey(50);//[ms]
+		// 画像の表示
+		cv::imshow(WINDOW_O, mat_img_color);
+		cv::imshow(WINDOW_R, mat_img_result);
+		cv::waitKey(50);  // 単位は[ms]
 
-		//結果の出力
+		// 結果の出力
 		image_pub_.publish(cv_img_ptr->toImageMsg());
 		if(is_block)
 		{
-			//ROS_INFO("(%.0f, %.0f)", pose2d_block.x, pose2d_block.y);
-			
-			pose_pub2d_.publish(pose2d_block);
-			pose_pub3d_.publish(pose2d_block_3d);
-			pose_pub3d_disp_.publish(point_block_disp);
+			pose_block_size_.publish(int_max_area);
+
+		    // 大きすぎるものと小さすぎるものを排除する。
+			if((3000 <= int_max_area)&&(int_max_area <= 9000))
+			{
+				//PointからPose2Dへ変換してからPublishする。
+				
+				geometry_msgs::Pose2D pose2d_temp;
+				
+				pose2d_temp.x = pose3d_block_tf.point.x;
+				pose2d_temp.y = pose3d_block_tf.point.y;
+				
+				pose_pub2d_.publish(pose2d_block);
+				pose_pub3d_.publish(pose2d_temp);
+				pose_pub3d_pattern_.publish(point_block_disp);
+				pose_pub3d_world_.publish(pose3d_block_tf);
+			}
 		}
 	}
 };
@@ -473,13 +493,21 @@ int main(int argc, char** argv)
 	{
 		std::cout << "arg[" << i << "]: " << argv[i] << std::endl;
 	}
-	
-	int_method = std::stoi(argv[1]);
-	
+
+	//画像処理手法を選択する。
+	if(argc == 4)
+	{
+		int_method = std::stoi(argv[1]);
+	}
+	else
+	{
+		int_method = 2;
+	}
+
 	ros::init(argc, argv, "block_finder");
-	
+
 	BlockFinder bf;
-	
+
 	ros::spin();
 	return 0;
 }

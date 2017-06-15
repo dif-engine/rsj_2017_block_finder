@@ -55,7 +55,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/TF
       Enabled: true
-      Frame Timeout: 360
+      Frame Timeout: 10
       Frames:
         All Enabled: true
         camera_link:
@@ -70,11 +70,10 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        camera_link:
-          pattern_link:
-            {}
-          world:
-            {}
+        world:
+          camera_link:
+            pattern_link:
+              {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -84,7 +83,7 @@ Visualization Manager:
       History Length: 1
       Name: PointStamped
       Radius: 0.0500000007
-      Topic: /block_finder/pose_point
+      Topic: /block_finder/pose_point_pattern
       Unreliable: false
       Value: true
   Enabled: true
@@ -111,24 +110,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.90731883
+      Distance: 3.52352428
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.0812956691
-        Y: 0.202751681
-        Z: -0.0030515762
+        X: -0.359157503
+        Y: 0.0901075229
+        Z: 0.258260667
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: -0.604601264
+      Pitch: -0.704601467
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.29356766
+      Yaw: 4.50857067
     Saved: ~
 Window Geometry:
   Displays:
