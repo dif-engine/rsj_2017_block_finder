@@ -9,7 +9,8 @@ Panels:
         - /Grid1
         - /TF1
         - /TF1/Frames1
-        - /TF1/Tree1
+        - /TF1/Tree1/world1
+        - /TF1/Tree1/world1/camera_link1
         - /PointStamped1
       Splitter Ratio: 0.5
     Tree Height: 713
@@ -36,9 +37,9 @@ Visualization Manager:
   Class: ""
   Displays:
     - Alpha: 0.5
-      Cell Size: 1
+      Cell Size: 0.100000001
       Class: rviz/Grid
-      Color: 160; 160; 164
+      Color: 204; 204; 204
       Enabled: true
       Line Style:
         Line Width: 0.0299999993
@@ -51,7 +52,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 10
-      Reference Frame: <Fixed Frame>
+      Reference Frame: world
       Value: true
     - Class: rviz/TF
       Enabled: true
@@ -82,8 +83,8 @@ Visualization Manager:
       Enabled: true
       History Length: 1
       Name: PointStamped
-      Radius: 0.0500000007
-      Topic: /block_finder/pose_point_pattern
+      Radius: 0.0399999991
+      Topic: /block_finder/pose_point_world
       Unreliable: false
       Value: true
   Enabled: true
@@ -110,24 +111,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 3.52352428
+      Distance: 1.72471642
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.359157503
-        Y: 0.0901075229
-        Z: 0.258260667
+        X: 0.032070905
+        Y: -0.0814975798
+        Z: 0.220781997
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: -0.704601467
+      Pitch: -1.56979632
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.50857067
+      Yaw: 4.73357964
     Saved: ~
 Window Geometry:
   Displays:
