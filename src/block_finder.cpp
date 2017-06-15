@@ -477,6 +477,7 @@ public:
 				
 				pose2d_temp.x = pose3d_block_tf.point.x;
 				pose2d_temp.y = pose3d_block_tf.point.y;
+				pose2d_temp.theta = 0;
 				
 				pose_pub2d_.publish(pose2d_block);
 				pose_pub3d_.publish(pose2d_temp);
