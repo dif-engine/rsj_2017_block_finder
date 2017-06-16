@@ -21,8 +21,10 @@
 #include <vector>
 #include <iostream>
 
-static const std::string WINDOW_O = "Original";
-static const std::string WINDOW_R = "Result";
+//static const std::string "Original" = "Original";
+//static const std::string "Result" = "Result";
+//static const char* "Original" = "Original";
+//static const char* "Result" = "Result";
 
 static const float SIZE_BOX = 0.0285;
 static const float EST_RESO = 0.001;
@@ -53,6 +55,8 @@ class BlockFinder
 	std::string fixed_frame;
 	std::string camera_frame;
 	std::string target_frame;
+	
+
 
 	cv::Matx33d mat_k_;  // カメラの内部パラメーター
 	cv::Mat mat_d_;  // 歪み係数
@@ -135,13 +139,13 @@ public:
 
 		ROS_INFO("Method %d selected!", int_method);
 
-		cv::namedWindow(WINDOW_O);
-		cv::namedWindow(WINDOW_R);
-		cv::moveWindow(WINDOW_O, 0, 0);
-		cv::moveWindow(WINDOW_R, 0, 550);//640, 0
+		cv::namedWindow("Original");
+		cv::namedWindow("Result");
+		cv::moveWindow("Original", 0, 0);
+		cv::moveWindow("Result", 0, 550);//640, 0
 		
 		int_thre_bin_ = 150;
-		cv::createTrackbar("Subtracter", WINDOW_R, &int_thre_bin_, 255);
+		cv::createTrackbar("Subtracter", "Result", &int_thre_bin_, 255);
 
 		//３次元位置を求める。
 		ideal_points_ = calcChessboardCorners(cv::Size(8, 6), SIZE_BOX, cv::Point3f(0.0,0.0,0.0));
@@ -155,8 +159,8 @@ public:
 
 	~BlockFinder()
 	{
-		cv::destroyWindow(WINDOW_O);
-		cv::destroyWindow(WINDOW_R);
+		cv::destroyWindow("Original");
+		cv::destroyWindow("Result");
 	}
 
 	//====================================================================================================
@@ -454,8 +458,8 @@ public:
 		}
 
 		// 画像の表示
-		cv::imshow(WINDOW_O, mat_img_color);
-		cv::imshow(WINDOW_R, mat_img_result);
+		cv::imshow("Original", mat_img_color);
+		cv::imshow("Result", mat_img_result);
 		cv::waitKey(50);  // 単位は[ms]
 
 		// 結果の出力
