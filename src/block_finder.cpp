@@ -119,8 +119,8 @@ public:
 	{	
 		ROS_INFO("OpenCV Version: %d.%d",CV_MAJOR_VERSION, CV_MINOR_VERSION);
 
-		info_sub_ = nh_.subscribe("/usb_cam_node/camera_info", 1, &BlockFinder::infoCallback, this);
-		image_sub_ = it_.subscribe("/usb_cam_node/image_raw", 1, &BlockFinder::imageCb, this);
+		info_sub_ = nh_.subscribe("/camera/camera_info", 1, &BlockFinder::infoCallback, this);
+		image_sub_ = it_.subscribe("/camera/image_raw", 1, &BlockFinder::imageCb, this);
 
 		image_pub_ = it_.advertise("/block_finder/image_block", 1);
 		pub_position_image_ = nh_.advertise<geometry_msgs::Pose2D>("/block_finder/pose_image", 1);
