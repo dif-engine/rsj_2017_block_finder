@@ -466,7 +466,9 @@ public:
 		image_pub_.publish(cv_img_ptr->toImageMsg());
 		if(is_block)
 		{
-			pub_block_size_.publish(int_max_area_);
+			std_msgs::Int32 max_area_msg;
+			max_area_msg.data = int_max_area_;
+			pub_block_size_.publish(max_area_msg);
 
 		    // 大きすぎるものと小さすぎるものを排除する。
 			if((3000 <= int_max_area_)&&(int_max_area_ <= 9000))
