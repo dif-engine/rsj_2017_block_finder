@@ -324,8 +324,11 @@ class BlockFinder {
           cv::Mat R;
 
           // 画像上の２次元位置と空間内の３次元位置を対応付ける。
-          cv::solvePnP(ideal_points_, observation_points_, mat_k_, mat_d_,
-                       mat_rvec_, mat_tvec_, false);
+          if (!cv::solvePnP(ideal_points_, observation_points_, mat_k_, mat_d_,
+                            mat_rvec_, mat_tvec_, false)) {
+            ROS_ERROR("Failed to calculate chessboard position");
+            return;
+          }
           // 回転ベクトルを回転行列へ変換する。
           cv::Rodrigues(mat_rvec_, R);
           // OpenCVからEigenへ変換する。
