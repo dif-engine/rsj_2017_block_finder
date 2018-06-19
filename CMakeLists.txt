@@ -203,5 +203,7 @@ catkin_package(
 # catkin_add_nosetests(test)
 find_package( OpenCV REQUIRED )
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} )
-add_executable(block_finder src/block_finder.cpp)
+add_executable(block_finder src/block_finder_node.cpp src/block_finder.cpp)
+add_executable(block_finder_headless src/block_finder_node_headless.cpp src/block_finder.cpp)
 target_link_libraries(block_finder ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} )
+target_link_libraries(block_finder_headless ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} )
