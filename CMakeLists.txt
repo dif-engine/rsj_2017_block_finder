@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(rsj_2017_block_finder)
 
-## Add support for C++11, supported in ROS Kinetic and newer
-add_definitions(-std=c++11)
+## Add support for C++14 for ROS Noetic
+set(CMAKE_CXX_STANDARD 14)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -202,6 +202,7 @@ catkin_package(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 find_package( OpenCV REQUIRED )
+#find_package( PCL 1.8 REQUIRED )
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} )
 add_executable(block_finder src/block_finder_node.cpp src/block_finder.cpp)
 add_executable(block_finder_headless src/block_finder_node_headless.cpp src/block_finder.cpp)
