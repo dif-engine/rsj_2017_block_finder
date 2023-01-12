@@ -157,7 +157,7 @@ geometry_msgs::Pose2D BlockFinder::rsjImageProcessing(cv::Mat& mat_img_input_c,
         x /= count;
         y /= count;
         circle(mat_img_input_c, cv::Point(x, y), 8, cv::Scalar(0, 0, 255), -1,
-               CV_AA);
+               cv::LINE_AA);
 
         pose2d_block_image.x = x;
         pose2d_block_image.y = y;
@@ -210,7 +210,7 @@ geometry_msgs::Pose2D BlockFinder::rsjImageProcessing(cv::Mat& mat_img_input_c,
           static_cast<int>(param[1] + param[3] / 2);
 
       circle(mat_img_input_c, pose2d_block_disp, 8, cv::Scalar(0, 0, 255), -1,
-             CV_AA);
+             cv::LINE_AA);
     }
 
     mat_img_result = mat_img_mask_bin.clone();
