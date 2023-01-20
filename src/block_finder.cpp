@@ -396,7 +396,7 @@ void BlockFinder::imageCb(const sensor_msgs::ImageConstPtr& msg) {
   // 画像の表示
   if (!is_headless_) {
     cv::imshow(BF_IMAGE_ORIGINAL, mat_img_color);
-    cv::imshow("Result", mat_img_result);
+    cv::imshow(BF_IMAGE_RESULT, mat_img_result);
     cv::waitKey(50);  // 単位は[ms]
   }
 
