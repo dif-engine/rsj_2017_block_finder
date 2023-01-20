@@ -7,6 +7,9 @@
 static const float SIZE_BOX = 0.0285;
 static const float EST_RESO = 0.001;
 
+#define BF_IMAGE_ORIGINAL "Original(block_finder)"
+#define BF_IMAGE_RESULT "Result(block_finder)"
+
 void BlockFinder::convertCVtoEigen(const cv::Mat& mat_tvec_, const cv::Mat& R,
                                    Eigen::Vector3f& translation,
                                    Eigen::Quaternionf& orientation) {
@@ -79,13 +82,13 @@ BlockFinder::BlockFinder(int method, bool is_headless) : int_method_(method), it
 
   if (!is_headless_) {
     std::cout << "Running with GUI" << std::endl;
-    cv::namedWindow("Original");
-    cv::namedWindow("Result");
-    cv::moveWindow("Original", 0, 0);
-    cv::moveWindow("Result", 0, 550);  // 640, 0
+    cv::namedWindow(BF_IMAGE_ORIGINAL);
+    cv::namedWindow(BF_IMAGE_RESULT);
+    cv::moveWindow(BF_IMAGE_ORIGINAL, 0, 0);
+    cv::moveWindow(BF_IMAGE_RESULT, 0, 550);  // 640, 0
 
     int_thre_bin_ = 150;
-    cv::createTrackbar("Subtracter", "Result", &int_thre_bin_, 255);
+    cv::createTrackbar("Subtracter", BF_IMAGE_RESULT, &int_thre_bin_, 255);
   }
 
   // ３次元位置を求める。
@@ -101,8 +104,8 @@ BlockFinder::BlockFinder(int method, bool is_headless) : int_method_(method), it
 
 BlockFinder::~BlockFinder() {
   if (!is_headless_) {
-    cv::destroyWindow("Original");
-    cv::destroyWindow("Result");
+    cv::destroyWindow(BF_IMAGE_ORIGINAL);
+    cv::destroyWindow(BF_IMAGE_RESULT);
   }
 }
 
@@ -392,7 +395,7 @@ void BlockFinder::imageCb(const sensor_msgs::ImageConstPtr& msg) {
 
   // 画像の表示
   if (!is_headless_) {
-    cv::imshow("Original", mat_img_color);
+    cv::imshow(BF_IMAGE_ORIGINAL, mat_img_color);
     cv::imshow("Result", mat_img_result);
     cv::waitKey(50);  // 単位は[ms]
   }
